@@ -1,0 +1,504 @@
+import pandas as pd
+import numpy as np
+import sys
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import KFold
+from sklearn.model_selection import GridSearchCV
+from collections import *
+import warnings
+warnings.filterwarnings("ignore")
+from sklearn.decomposition import FastICA
+
+# read the excel file to the dataframe called "df_raw_features"
+df_raw_features = pd.read_excel('features.xlsx')
+df_raw_features.head()
+
+# check if there is non-numeric value in the dataframe
+types = df_raw_features.dtypes
+for i in range(len(types)):
+    if types[i] != 'float64' and types[i] != 'int64':
+        print(i)
+print('all values are numeric')
+
+# check if there is null values in the dataframe "df_raw_features"
+df_raw_features.isnull().sum().sum()
+
+# check if there is missing values in the dataframe "df_raw_features"
+df_raw_features.isna().sum().sum()
+
+# check the distribution of labels; is it a balanced dataset?
+l0 = len(df_raw_features.loc[df_raw_features['Label'] == 0])
+l1 = len(df_raw_features.loc[df_raw_features['Label'] == 1])
+print(f'No. of negative samples: {l0}\nNo. of positive samples: {l1}')
+sns.countplot(df_raw_features['Label'], label= 'count')
+
+# describe() method
+pd.set_option('display.max_columns', None) # display all columns
+df_raw_features.describe()
+
+# convert the dataframe "df_raw_features" to array
+arr_raw_features = df_raw_features.to_numpy()
+
+# remove the "patient ID" and "Label" columns from X_task1 and the column "patient ID" from y_task1
+#del X_task1, y_task1
+X_task1 = arr_raw_features[:, 1: -1]
+y_task1 = arr_raw_features[:, -1]
+print(X_task1.shape, y_task1.shape)
+
+# normalise data using "MinMaxScaler"
+minmax_scaler = MinMaxScaler()
+X_task1 = minmax_scaler.fit_transform(X_task1)
+
+# dimensionality reduction using PCA
+from sklearn.decomposition import PCA
+pca = PCA(n_components=0.95, random_state=0)
+pca.fit(X_task1)
+X_task1 = pca.transform(X_task1)
+print('the number of remaining features: ', X_task1.shape[1])
+
+# split data into train and test sets
+x_train, x_test, y_train, y_test = train_test_split(X_task1, y_task1, random_state=0)
+
+# "CatBoostClassifier"
+from catboost import CatBoostClassifier
+model = CatBoostClassifier(iterations=100, learning_rate=0.1, depth=6, task_type='GPU', eval_metric='Accuracy')
+model.fit(x_train, y_train, [], eval_set=(x_test, y_test))
+
+y_pred = model.predict(x_test)
+
+# confusion matrix for the data normalised by MinMaxScaler
+cm = confusion_matrix(y_true=y_test, y_pred=y_pred)
+cm
+
+# metrics for the data normalised by MinMaxScaler
+print(classification_report(y_true=y_test, y_pred=y_pred))
+
+# normalise data using "StandardScaler"
+from sklearn.preprocessing import StandardScaler
+std_scaler = StandardScaler()
+X_task1 = std_scaler.fit_transform(X_task1)
+
+
+del X_task1, y_task1
+X_task1 = arr_raw_features[:, 1: -1]
+y_task1 = arr_raw_features[:, -1]
+
+
+# normalise data using "MinMaxScaler"
+from sklearn.preprocessing import MinMaxScaler
+minmax_scaler = MinMaxScaler()
+X_task1 = minmax_scaler.fit_transform(X_task1)
+
+
+# dimension reduction using PCA
+from sklearn.decomposition import PCA
+pca = PCA(n_components=0.95, random_state=0)
+pca.fit(X_task1)
+X_task1 = pca.transform(X_task1)
+X_task1.shape[1]
+
+
+# split data into train and test 
+x_train, x_test, y_train, y_test = train_test_split(X_task1, y_task1, random_state=0)
+
+# linear SVM model
+from sklearn.svm import SVC
+svm_classifier = SVC(random_state=0)
+svm_classifier.fit(x_train, y_train)
+
+# predict labels from x_test
+y_pred = svm_classifier.predict(x_test)
+
+# confusion matrix for the features reduced by PCA
+from sklearn.metrics import confusion_matrix
+cm = confusion_matrix(y_true=y_test, y_pred=y_pred)
+cm
+
+# metrics for the features reduced by PCA
+print(classification_report(y_true=y_test, y_pred=y_pred))
+
+from sklearn.decomposition import FastICA
+fastICA = FastICA(random_state=0, n_components=30)
+X_task1 = fastICA.fit_transform(X_task1)
+
+from sklearn.manifold import Isomap
+isomap = Isomap(n_components=30)
+X_task1 = isomap.fit_transform(X_task1)
+
+import umap
+umap = umap.UMAP(n_components=30, random_state=0)
+X_task1 = umap.fit_transform(X_task1)
+
+from sklearn.decomposition import FactorAnalysis
+fa = FactorAnalysis(n_components=30, random_state=0)
+X_task1 = fa.fit_transform(X_task1)
+
+from sklearn.manifold import TSNE
+tsne = TSNE(random_state=0)
+X_task1 = tsne.fit_transform(X_task1)
+
+# chi-squared test 
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import chi2
+X_task1 = SelectKBest(k=30).fit_transform(X_task1, y_task1)
+
+# backward selection
+from sklearn.feature_selection import SequentialFeatureSelector
+from catboost import CatBoostClassifier
+cat = CatBoostClassifier(iterations=10, task_type='GPU')
+sfs = SequentialFeatureSelector(cat, n_features_to_select=30, direction='backward')
+X_task1 = sfs.fit_transform(X_task1, y_task1)
+
+# this part is generally inspired from: https://github.com/nishantrajpoot/breastCancerML/blob/815e75da355438b1ffb3d54d711b1d520e1da0d2/CancerProject%20-Final.ipynb
+# extra trees classifier
+from sklearn.ensemble import ExtraTreesClassifier
+target_col = "Label"
+PatientID = "Patient ID"
+X1 = df_raw_features.loc[:, df_raw_features.columns != target_col]
+X2 = X1.loc[:, X1.columns != PatientID]
+y = df_raw_features.loc[:, target_col]
+model = ExtraTreesClassifier(random_state=0)
+model.fit(X2,y)
+feat_importances = pd.Series(model.feature_importances_, index=X2.columns)
+feat_importances.nlargest(30).plot(kind='barh', figsize=(10,20))
+plt.show()
+
+# create a new dataframe called "df_extra" with the 30 most important features obtained from "ExtraTreesClassifier" 
+a = model.feature_importances_
+b = np.argpartition(a, range(len(a)))[-1:-31:-1]
+c = df_raw_features.columns[b]
+df_extra = df_raw_features[c]
+df_extra.insert(0,'Patient ID',df_raw_features['Patient ID'])
+df_extra.insert(31,'Label',df_raw_features['Label'])
+df_extra_arr = df_extra.to_numpy()
+X_task1 = df_extra_arr[:, 1:-1]
+y_task1 = df_extra_arr[:, -1]
+
+del X_task1, y_task1
+X_task1 = arr_raw_features[:, 1: -1]
+y_task1 = arr_raw_features[:, -1]
+
+# normalise data using "MinMaxScaler"
+minmax_scaler = MinMaxScaler() 
+X_task1 = minmax_scaler.fit_transform(X_task1)
+
+# Fast ICA
+fastICA = FastICA(random_state=0, n_components=30)
+X_task1 = fastICA.fit_transform(X_task1)
+
+
+x_train, x_test, y_train, y_test = train_test_split(X_task1, y_task1, random_state=0)
+
+from imblearn.over_sampling import RandomOverSampler
+ros = RandomOverSampler(random_state=0)
+X_ros, y_ros = ros.fit_resample(X_task1, y_task1)
+
+
+# Fast ICA
+fastICA = FastICA(random_state=0, n_components=30)
+X_ros = fastICA.fit_transform(X_ros)
+
+x_train, x_test, y_train, y_test = train_test_split(X_ros, y_ros, random_state=0)
+
+from imblearn.under_sampling import RandomUnderSampler
+rus = RandomUnderSampler(random_state=0)
+X_rus, y_rus = rus.fit_resample(X_task1, y_task1)
+
+# Fast ICA
+fastICA = FastICA(random_state=0, n_components=30)
+X_rus = fastICA.fit_transform(X_rus)
+
+x_train, x_test, y_train, y_test = train_test_split(X_rus, y_rus, random_state=0)
+
+from sklearn.tree import DecisionTreeClassifier
+DT_classifier = DecisionTreeClassifier(random_state=0, criterion='gini') #criterion='entropy'
+DT_classifier.fit(x_train, y_train)
+y_pred = DT_classifier.predict(x_test)
+
+cm = confusion_matrix(y_true=y_test, y_pred=y_pred)
+cm
+
+print(classification_report(y_true=y_test, y_pred=y_pred))
+
+from sklearn.neighbors import KNeighborsClassifier
+KNN_classifier = KNeighborsClassifier(n_neighbors=200)
+KNN_classifier.fit(x_train, y_train)
+
+y_pred = KNN_classifier.predict(x_test)
+
+cm = confusion_matrix(y_true=y_test, y_pred=y_pred)
+cm
+
+print(classification_report(y_true=y_test, y_pred=y_pred))
+
+from sklearn.ensemble import RandomForestClassifier
+ERF_classifier = RandomForestClassifier(max_depth=2, random_state=0) #criterion='entropy'
+ERF_classifier.fit(x_train, y_train)
+
+y_pred = ERF_classifier.predict(x_test)
+
+cm = confusion_matrix(y_true=y_test, y_pred=y_pred)
+cm
+
+print(classification_report(y_true=y_test, y_pred=y_pred))
+
+from sklearn.svm import SVC
+SVC_classifier = SVC(random_state=0)
+SVC_classifier.fit(x_train, y_train)
+
+SVC(random_state=0)
+
+y_pred = SVC_classifier.predict(x_test)
+
+cm = confusion_matrix(y_true=y_test, y_pred=y_pred)
+cm
+
+print(classification_report(y_true=y_test, y_pred=y_pred))
+
+from sklearn.ensemble import AdaBoostClassifier
+ada_classifier = AdaBoostClassifier(n_estimators=100, random_state=0)
+ada_classifier.fit(x_train, y_train)
+
+y_pred = ada_classifier.predict(x_test)
+
+cm = confusion_matrix(y_true=y_test, y_pred=y_pred)
+cm
+
+print(classification_report(y_true=y_test, y_pred=y_pred))
+
+# read the .csv file containing all results
+all_results = pd.read_csv('all_models.csv')
+all_results
+
+
+# plot Accuracy vs. Model for each scenario
+plt.figure(1)
+plt.plot(all_results['models'], all_results['minmax.ros.ica'],marker="o",color="red")
+plt.title("minmax.ros.ica")
+plt.ylabel('accuracy')
+plt.xlabel('models') 
+plt.figure(2)
+plt.plot(all_results['models'], all_results['minmax.ica'],marker="o",color="red")
+plt.title("minmax.ica")
+plt.ylabel('accuracy')
+plt.xlabel('models')
+plt.figure(3)
+plt.plot(all_results['models'], all_results['minmax.fa'],marker="o",color="red")
+plt.title("minmax.fa")
+plt.ylabel('accuracy')
+plt.xlabel('models')
+plt.figure(4)
+plt.plot(all_results['models'], all_results['minmax.umap'],marker="o",color="red")
+plt.title("minmax.umap")
+plt.ylabel('accuracy')
+plt.xlabel('models')
+plt.figure(5)
+plt.plot(all_results['models'], all_results['minmax.backward'],marker="o",color="red")
+plt.title("minmax.backward")
+plt.ylabel('accuracy')
+plt.xlabel('models')
+plt.figure(6)
+plt.plot(all_results['models'], all_results['minmax.rus.ica'],marker="o",color="red")
+plt.title("minmax.rus.ica")
+plt.ylabel('accuracy')
+plt.xlabel('models')
+plt.figure(7)
+plt.plot(all_results['models'], all_results['minmax'],marker="o",color="red")
+plt.title("minmax")
+plt.ylabel('accuracy')
+plt.xlabel('models')
+plt.figure(8)
+plt.plot(all_results['models'], all_results['minmax.isomap'],marker="o",color="red")
+plt.title("minmax.isomap")
+plt.ylabel('accuracy')
+plt.xlabel('models')
+plt.figure(9)
+plt.plot(all_results['models'], all_results['minmax.tsne'],marker="o",color="red")
+plt.title("minmax.tsne")
+plt.ylabel('accuracy')
+plt.xlabel('models')
+plt.figure(10)
+plt.plot(all_results['models'], all_results['minmax.ros'],marker="o",color="red")
+plt.title("minmax.ros")
+plt.ylabel('accuracy')
+plt.xlabel('models')
+plt.figure(11)
+plt.plot(all_results['models'], all_results['minmax.rus'],marker="o",color="red")
+plt.title("minmax.rus")
+plt.ylabel('accuracy')
+plt.xlabel('models')
+plt.figure(12)
+plt.plot(all_results['models'], all_results['minmax.chi'],marker="o",color="red")
+plt.title("minmax.chi")
+plt.ylabel('accuracy')
+plt.xlabel('models')
+plt.figure(13)
+plt.plot(all_results['models'], all_results['minmax.forward'],marker="o",color="red")
+plt.title("minmax.forward")
+plt.ylabel('accuracy')
+plt.xlabel('models')
+plt.figure(14)
+plt.plot(all_results['models'], all_results['minmax.etc'],marker="o",color="red")
+plt.title("minmax.etc")
+plt.ylabel('accuracy')
+plt.xlabel('models')
+
+plt.show()
+
+# plot Accuracy vs. Models for all scenarios in one plot
+plt.figure(1,(16,14))
+plt.plot(all_results['models'], all_results['minmax.ros.ica'],marker="o",linestyle='--',color="red",label='ros.ica')
+plt.plot(all_results['models'], all_results['minmax.ica'],marker="v",linestyle='--',color="green",label='ica')
+plt.plot(all_results['models'], all_results['minmax.fa'],marker=".",linestyle='--',color="blue",label='fa')
+plt.plot(all_results['models'], all_results['minmax.umap'],marker=",",linestyle='--',color="yellow",label='umap')
+plt.plot(all_results['models'], all_results['minmax.backward'],marker="<",linestyle='--',color="magenta",label='backward')
+plt.plot(all_results['models'], all_results['minmax.rus.ica'],marker=">",linestyle='--',color="black",label='rus.ica')
+plt.plot(all_results['models'], all_results['minmax'],marker="*",linestyle='--',color="red",label='minmax')
+plt.plot(all_results['models'], all_results['minmax.isomap'],marker="1",linestyle='--',color="green",label='isomap')
+plt.plot(all_results['models'], all_results['minmax.tsne'],marker="2",linestyle='--',color="blue",label='tsne')
+plt.plot(all_results['models'], all_results['minmax.ros'],marker="3",linestyle='--',color="yellow",label='ros')
+plt.plot(all_results['models'], all_results['minmax.rus'],marker="4",linestyle='--',color="magenta",label='rus')
+plt.plot(all_results['models'], all_results['minmax.chi'],marker="*",linestyle='--',color="black",label='chi')
+plt.plot(all_results['models'], all_results['minmax.forward'],marker="^",linestyle='--',color="red",label='forward')
+plt.plot(all_results['models'], all_results['minmax.etc'],marker="s",linestyle='--',color="green",label='etc')
+plt.title("All Results")
+plt.ylabel('Accuracy')
+plt.xlabel('Models')
+plt.legend(loc='upper left')
+plt.show()
+
+from sklearn.svm import SVC
+SVC_classifier = SVC(random_state=0)
+SVC_classifier.fit(x_train, y_train)
+
+
+y_pred = SVC_classifier.predict(x_test)
+
+cm = confusion_matrix(y_true=y_test, y_pred=y_pred)
+cm
+
+print(classification_report(y_true=y_test, y_pred=y_pred))
+
+
+from sklearn.svm import SVC
+from sklearn.model_selection import StratifiedKFold
+# specify different values for the parameters C, gamma, and kernel and put them all into a dictionary
+Cs = [0.1, 1, 10]
+gammas = [0.01, 0.1, 1]
+kernels = ['linear', 'poly', 'rbf', 'sigmoid']
+parameters = dict(C= Cs, gamma= gammas, kernel= kernels)
+
+# tune the svc model
+clf = SVC(random_state= 0)
+#skf = StratifiedKFold(shuffle=True, random_state=0)
+grid = GridSearchCV(estimator= clf, param_grid= parameters, scoring='accuracy', cv=10) #cv=skf
+grid_result = grid.fit(X_task1, y_task1)
+print("Best: %f using %s\n\n" % (grid_result.best_score_, grid_result.best_params_))
+means = grid_result.cv_results_['mean_test_score']
+params = grid_result.cv_results_['params']
+for mean, param in zip(means, params):
+    print("%f with: %r" % (mean, param))
+
+# split data set
+X_task2 = arr_raw_features[:, 1: -1]
+y_task2 = arr_raw_features[:, -1]
+
+# normalisation
+minmax_scaler = MinMaxScaler() 
+X_task2 = minmax_scaler.fit_transform(X_task2)
+
+# reduce features to 30 using chi-squared selection
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import chi2
+X_task2 = SelectKBest(k=30).fit_transform(X_task2, y_task2)
+
+# classify micros using tuned SVC model (the best obtained model from machine learning part)
+from sklearn.svm import SVC
+SVC_classifier = SVC(random_state=0, kernel='rbf', C= 10, gamma= 1)
+SVC_classifier.fit(X_task2, y_task2)
+label = SVC_classifier.predict(X_task2)
+
+# create a dataframe to count the number of 0s and 1s micros for each patient
+data_df = df_raw_features.iloc[:, [0]]
+data_df['Label'] = label
+data_df
+# convert "data_df" dataframe to array
+data_arr = data_df.to_numpy()
+#data_arr
+
+# create a function to count the number of 0s and 1s micros for each patient using "data_arr"
+def counter():
+    result = []
+    for i in range(1, 97):
+        l = []
+        cnt = Counter()
+        for j in range(len(data_arr)):
+            if data_arr[j, 0] == i:
+                l.append(data_arr[j, 1])
+        #print(l)
+        for label in l:
+            cnt[round(label)] += 1
+        #print(cnt)
+        result.append(cnt)
+    return result
+
+nr_eachLabel = counter()
+nr_eachLabel[0:5]
+
+# create a dataframe called "df_task2" with the columns "No. of 0s" and "No. of 1s" and 96 rows for each patient
+rows = [[nr_eachLabel[i][0], nr_eachLabel[i][1]] for i in range(0,96)]
+df_task2 = pd.DataFrame(rows, columns=['No. of 0s', 'No. of 1s'])
+df_task2
+
+# add patient IDs to "df_task2"
+df_task2.insert(loc= 0, column= 'Patient ID', value= [i for i in range(1, 97)])
+
+# add the total number of micros for each patient
+df_task2.insert(loc= 3, column= 'No. of micros', value= df_task2.iloc[:, 1] + df_task2.iloc[:, 2])
+df_task2
+
+# add true labels, indicating whether a patient has cancer or not, to "df_task2"
+true_label = list(map(lambda x: 0 if x < 47 else 1, range(1, 97)))
+df_task2['Label'] = true_label
+
+pd.set_option('display.max_rows', 100)
+df_task2
+
+del X_task2, y_task2
+
+# split data set into X and y
+arr_task2 = df_task2.to_numpy()
+X_task2 = arr_task2[:, 1:-1]
+y_task2 = arr_task2[:, -1]
+
+# shuffle data; apply 5-fold cross-validation with "LogisticRegression" model
+from sklearn.model_selection import KFold
+from sklearn.model_selection import cross_val_score
+from sklearn.linear_model import LogisticRegression
+from numpy import mean, std
+
+cv_task2 = KFold(n_splits=5, random_state=0, shuffle=True)
+lr_classifier = LogisticRegression(random_state=0)
+scores = cross_val_score(lr_classifier, X_task2, y_task2, scoring='accuracy', cv=cv_task2)
+print('Accuracy (std): %.3f (%.3f)' %(mean(scores), std(scores)))
+
+# shuffle data; apply 5-fold cross-validation with "NaiveBayes" model
+from sklearn.naive_bayes import GaussianNB
+
+cv_task2 = KFold(n_splits=5, random_state=0, shuffle=True)
+nb_classifier = GaussianNB()
+scores = cross_val_score(nb_classifier, X_task2, y_task2, scoring='accuracy', cv=cv_task2)
+print('Accuracy (std): %.3f (%.3f)' %(mean(scores), std(scores)))
+In [75]:
+# shuffle data; apply 5-fold cross-validation with "DecisionTree" model
+from sklearn.tree import DecisionTreeClassifier
+
+cv_task2 = KFold(n_splits=5, random_state=0, shuffle=True)
+dt_classifier = DecisionTreeClassifier(random_state=0, max_depth= 1)
+scores = cross_val_score(dt_classifier, X_task2, y_task2, scoring='accuracy', cv=cv_task2)
+print('Accuracy (std): %.3f (%.3f)' %(mean(scores), std(scores)))
